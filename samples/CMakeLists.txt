@@ -91,6 +91,7 @@ set(ORDER_LIST
     "color_write_enable"
     "sparse_image"
     "dynamic_primitive_clipping"
+    "subgroups_operations"
 
     #Performance Samples
     "swapchain_images"
@@ -133,11 +134,11 @@ set(ORDER_LIST
 	
 	#HPP Extension Samples
 	"hpp_mesh_shading"
-	
+
     #HPP Performance Samples
     "hpp_pipeline_cache"
     "hpp_swapchain_images"
-    
+
     #General Samples
     "mobile_nerf")
 
