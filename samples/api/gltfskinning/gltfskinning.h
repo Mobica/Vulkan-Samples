@@ -22,16 +22,69 @@
 class gltfskinning : public ApiVulkanSample
 {
   public:
+  /* lrm TODO leave out for simplicity
+  bool wireframe          = false;
+  */
+
+
+  /* sascha - 
+  struct Vertex
+  {
+    glm::vec3 pos;
+    glm::vec3 normal;
+    glm::vec2 uv;
+    glm::vec3 color;
+    glm::vec4 jointIndices;
+    glm::vec4 jointWeights;
+  } vertex;    
+  */
+
+  struct UniformBuffers
+  {
+    std::unique_ptr<vkb::core::Buffer> scene; // lrm TODO name appropriately
+  } uniform_buffers;
+
+  struct
+  {
+    glm::mat4 projection;
+    glm::mat4 modelview;
+    glm::vec4 light_pos = glm::vec4(5.0f, 5.0f, 5.0f, 1.0f);  
+  } ubo_values;
+
+  /* sascha uses 2 pipelines -
+  VkPipelineLayout pipelineLayout;
+  struct Pipelines
+  {
+    VkPipeline solid;
+    VkPipeline wireframe = VK_NULL_HANDLE;
+  } pipelines;
+  */
+
+
+
 	gltfskinning();
 	virtual ~gltfskinning();
 
 	// Create pipeline
 	void prepare_pipelines();
 
+  void setup_descriptor_pool();
+  void setup_descriptor_set_layout();
+  void setup_descriptor_sets();
+  void prepare_uniform_buffers();
+  void update_uniform_buffers();
+
 	// Override basic framework functionality
 	void build_command_buffers() override;
 	void render(float delta_time) override;
 	bool prepare(const vkb::ApplicationOptions &options) override;
+
+
+  /* lrm may leave this out for simplicity
+  virtual void on_update_ui_overlay(vkb::Drawer &drawer) override;
+  */
+
+  virtual bool resize(const uint32_t width, const uint32_t height) override;
 
   private:
 	// Sample specific data
