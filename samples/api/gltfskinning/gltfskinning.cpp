@@ -47,21 +47,149 @@ gltfskinning::~gltfskinning()
 // lrm TODO
 void gltfskinning::setup_descriptor_pool()
 {
+	/*
+		This sample uses separate descriptor sets (and layouts) for the matrices and materials
+	*/
+	std::vector<VkDescriptorPoolSize> pool_sizes =
+	    {
+	        vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1),
+	        // One combined image sampler per material image -  lrm TODO have hard coded 1 for cesiumman, make more flexible -  with tinygltf would use glTFModel.images.size()
+	        vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1),
+	        // One ssbo per skin - lrm TODO have hard coded 1 for cesiumman, make more flexible - with tinygltf would use glTFModel.skins.size()
+	        vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1)};
 
+	VkDescriptorPoolCreateInfo descriptor_pool_create_info =
+	    vkb::initializers::descriptor_pool_create_info(
+	        static_cast<uint32_t>(pool_sizes.size()),
+	        pool_sizes.data(),
+	        3);	// lrm TODO have hard coded to 3 (1 + 1 + 1), but should be more flexible as above. I still don't understand how to determine this maxsets thing really
 
+	VK_CHECK(vkCreateDescriptorPool(get_device().get_handle(), &descriptor_pool_create_info, nullptr, &descriptor_pool));	
 }
 
 // lrm TODO
 void gltfskinning::setup_descriptor_set_layout()
 {
+/* sascha -
+	// Descriptor set layouts
 
+	VkDescriptorSetLayoutBinding    setLayoutBinding{};
+	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI = vks::initializers::descriptorSetLayoutCreateInfo(&setLayoutBinding, 1);
+
+	// Descriptor set layout for passing matrices
+	setLayoutBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
+	VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.matrices));
+
+	// Descriptor set layout for passing material textures
+	setLayoutBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+	VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.textures));
+
+	// Descriptor set layout for passing skin joint matrices
+	setLayoutBinding = vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
+	VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.jointMatrices));
+
+	// The pipeline layout uses three sets:
+	// Set 0 = Scene matrices (VS)
+	// Set 1 = Joint matrices (VS)
+	// Set 2 = Material texture (FS)
+	std::array<VkDescriptorSetLayout, 3> setLayouts = {
+	    descriptorSetLayouts.matrices,
+	    descriptorSetLayouts.jointMatrices,
+	    descriptorSetLayouts.textures};
+	VkPipelineLayoutCreateInfo pipelineLayoutCI = vks::initializers::pipelineLayoutCreateInfo(setLayouts.data(), static_cast<uint32_t>(setLayouts.size()));
+
+	// We will use push constants to push the local matrices of a primitive to the vertex shader
+	VkPushConstantRange pushConstantRange = vks::initializers::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), 0);
+	// Push constant ranges are part of the pipeline layout
+	pipelineLayoutCI.pushConstantRangeCount = 1;
+	pipelineLayoutCI.pPushConstantRanges    = &pushConstantRange;
+
+	VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
+*/
+
+	VkDescriptorSetLayoutBinding  			  descriptor_set_layout_binding;
+	VkDescriptorSetLayoutCreateInfo           descriptor_layout_create_info;
+	VkPipelineLayoutCreateInfo                pipeline_layout_create_info;
+
+	// Descriptor set layout for passing scene matrices
+	descriptor_set_layout_binding = vkb::initializers::descriptor_set_layout_binding(
+	            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	            VK_SHADER_STAGE_VERTEX_BIT,
+	            0);																				// lrm TODO figure out why all the bindaings are 0
+
+	descriptor_layout_create_info =
+	    vkb::initializers::descriptor_set_layout_create_info(
+	        &descriptor_set_layout_binding,
+	        1);
+
+	VK_CHECK(vkCreateDescriptorSetLayout(get_device().get_handle(), &descriptor_layout_create_info, nullptr, &descriptor_set_layouts.scene_matrices));
+
+	// Descriptor set layout for passing material textures
+	descriptor_set_layout_binding = vkb::initializers::descriptor_set_layout_binding(
+	            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	            VK_SHADER_STAGE_FRAGMENT_BIT,
+	            0);																				// lrm TODO figure out why all the bindaings are 0
+
+	descriptor_layout_create_info =
+	    vkb::initializers::descriptor_set_layout_create_info(
+	        &descriptor_set_layout_binding,
+	        1);	
+
+	VK_CHECK(vkCreateDescriptorSetLayout(get_device().get_handle(), &descriptor_layout_create_info, nullptr, &descriptor_set_layouts.textures));
+
+	// Descriptor set layout for passing skin joint matrices
+	descriptor_set_layout_binding = vkb::initializers::descriptor_set_layout_binding(
+	            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+	            VK_SHADER_STAGE_VERTEX_BIT,
+	            0);																				// lrm TODO figure out why all the bindaings are 0
+
+	descriptor_layout_create_info =
+	    vkb::initializers::descriptor_set_layout_create_info(
+	        &descriptor_set_layout_binding,
+	        1);	
+
+	VK_CHECK(vkCreateDescriptorSetLayout(get_device().get_handle(), &descriptor_layout_create_info, nullptr, &descriptor_set_layouts.joint_matrices));
+
+	// The pipeline layout uses three sets:
+	// Set 0 = Scene matrices (VS)
+	// Set 1 = Joint matrices (VS)
+	// Set 2 = Material texture (FS)
+	// Create a pipeline layout using set 0 = Scene matrices, set 1 = Joint matrices and set 2 = Material texture
+	const std::array<VkDescriptorSetLayout, 3> set_layouts = {descriptor_set_layouts.scene_matrices, descriptor_set_layouts.joint_matrices, descriptor_set_layouts.textures};
+
+	pipeline_layout_create_info = vkb::initializers::pipeline_layout_create_info(set_layouts.data(), static_cast<uint32_t>(set_layouts.size()));
+	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &pipeline_layout_create_info, nullptr, &sample_pipeline_layout));
 
 }
 
 // lrm TODO
 void gltfskinning::setup_descriptor_sets()
 {
+/* sascha
+	// Descriptor set for scene matrices
+	VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.matrices, 1);
+	VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet));
+	VkWriteDescriptorSet writeDescriptorSet = vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &shaderData.buffer.descriptor);
+	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 
+	// Descriptor set for glTF model skin joint matrices
+	for (auto &skin : glTFModel.skins)
+	{
+		const VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.jointMatrices, 1);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &skin.descriptorSet));
+		VkWriteDescriptorSet writeDescriptorSet = vks::initializers::writeDescriptorSet(skin.descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &skin.ssbo.descriptor);
+		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+	}
+
+	// Descriptor sets for glTF model materials
+	for (auto &image : glTFModel.images)
+	{
+		const VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.textures, 1);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &image.descriptorSet));
+		VkWriteDescriptorSet writeDescriptorSet = vks::initializers::writeDescriptorSet(image.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &image.texture.descriptor);
+		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+	}
+*/
 
 }
 

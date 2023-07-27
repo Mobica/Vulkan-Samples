@@ -60,7 +60,13 @@ class gltfskinning : public ApiVulkanSample
   } pipelines;
   */
 
-
+  struct DescriptorSetLayouts
+  {
+    VkDescriptorSetLayout scene_matrices;
+    VkDescriptorSetLayout textures;
+    VkDescriptorSetLayout joint_matrices;
+  } descriptor_set_layouts;
+  VkDescriptorSet descriptor_set;
 
 	gltfskinning();
 	virtual ~gltfskinning();
