@@ -44,9 +44,24 @@ gltfskinning::~gltfskinning()
 	}
 }
 
-// lrm TODO
+
 void gltfskinning::setup_descriptor_pool()
 {
+	/*
+	std::vector<VkDescriptorPoolSize> poolSizes = {
+	    vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1),
+	    // One combined image sampler per material image/texture
+	    vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(glTFModel.images.size())),
+	    // One ssbo per skin
+	    vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, static_cast<uint32_t>(glTFModel.skins.size())),
+	};
+	// Number of descriptor sets = One for the scene ubo + one per image + one per skin
+	const uint32_t             maxSetCount        = static_cast<uint32_t>(glTFModel.images.size()) + static_cast<uint32_t>(glTFModel.skins.size()) + 1;
+	VkDescriptorPoolCreateInfo descriptorPoolInfo = vks::initializers::descriptorPoolCreateInfo(poolSizes, maxSetCount);
+	VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool));
+
+	*/
+
 	/*
 		This sample uses separate descriptor sets (and layouts) for the matrices and materials
 	*/
@@ -67,7 +82,7 @@ void gltfskinning::setup_descriptor_pool()
 	VK_CHECK(vkCreateDescriptorPool(get_device().get_handle(), &descriptor_pool_create_info, nullptr, &descriptor_pool));	
 }
 
-// lrm TODO
+
 void gltfskinning::setup_descriptor_set_layout()
 {
 /* sascha -
@@ -115,7 +130,7 @@ void gltfskinning::setup_descriptor_set_layout()
 	descriptor_set_layout_binding = vkb::initializers::descriptor_set_layout_binding(
 	            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 	            VK_SHADER_STAGE_VERTEX_BIT,
-	            0);																				// lrm TODO figure out why all the bindaings are 0
+	            0);																				// lrm TODO figure out why all the bindings are 0
 
 	descriptor_layout_create_info =
 	    vkb::initializers::descriptor_set_layout_create_info(
@@ -128,7 +143,7 @@ void gltfskinning::setup_descriptor_set_layout()
 	descriptor_set_layout_binding = vkb::initializers::descriptor_set_layout_binding(
 	            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 	            VK_SHADER_STAGE_FRAGMENT_BIT,
-	            0);																				// lrm TODO figure out why all the bindaings are 0
+	            0);																				// lrm TODO figure out why all the bindings are 0
 
 	descriptor_layout_create_info =
 	    vkb::initializers::descriptor_set_layout_create_info(
@@ -141,7 +156,7 @@ void gltfskinning::setup_descriptor_set_layout()
 	descriptor_set_layout_binding = vkb::initializers::descriptor_set_layout_binding(
 	            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 	            VK_SHADER_STAGE_VERTEX_BIT,
-	            0);																				// lrm TODO figure out why all the bindaings are 0
+	            0);																				// lrm TODO figure out why all the bindings are 0
 
 	descriptor_layout_create_info =
 	    vkb::initializers::descriptor_set_layout_create_info(
@@ -157,6 +172,8 @@ void gltfskinning::setup_descriptor_set_layout()
 	// Create a pipeline layout using set 0 = Scene matrices, set 1 = Joint matrices and set 2 = Material texture
 	const std::array<VkDescriptorSetLayout, 3> set_layouts = {descriptor_set_layouts.scene_matrices, descriptor_set_layouts.joint_matrices, descriptor_set_layouts.textures};
 
+	// lrm TODO push constant stuff
+
 	pipeline_layout_create_info = vkb::initializers::pipeline_layout_create_info(set_layouts.data(), static_cast<uint32_t>(set_layouts.size()));
 	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &pipeline_layout_create_info, nullptr, &sample_pipeline_layout));
 
@@ -166,13 +183,15 @@ void gltfskinning::setup_descriptor_set_layout()
 void gltfskinning::setup_descriptor_sets()
 {
 /* sascha
-	// Descriptor set for scene matrices
+	
+// Descriptor set for scene matrices
 	VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.matrices, 1);
 	VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet));
+
 	VkWriteDescriptorSet writeDescriptorSet = vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &shaderData.buffer.descriptor);
 	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 
-	// Descriptor set for glTF model skin joint matrices
+// Descriptor set for glTF model skin joint matrices
 	for (auto &skin : glTFModel.skins)
 	{
 		const VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.jointMatrices, 1);
@@ -181,7 +200,7 @@ void gltfskinning::setup_descriptor_sets()
 		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 	}
 
-	// Descriptor sets for glTF model materials
+// Descriptor sets for glTF model materials
 	for (auto &image : glTFModel.images)
 	{
 		const VkDescriptorSetAllocateInfo allocInfo = vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.textures, 1);
@@ -191,6 +210,47 @@ void gltfskinning::setup_descriptor_sets()
 	}
 */
 
+	VkDescriptorSetAllocateInfo       alloc_info;
+	VkWriteDescriptorSet write_descriptor_set;
+
+	// 1. Descriptor set for scene matrices
+	alloc_info = vkb::initializers::descriptor_set_allocate_info(descriptor_pool, &descriptor_set_layouts.scene_matrices, 1);
+	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &descriptor_sets.scene_matrices));
+
+	VkDescriptorBufferInfo scene_buffer_descriptor   = create_descriptor(*uniform_buffers.scene);
+
+	write_descriptor_set = vkb::initializers::write_descriptor_set(
+	    descriptor_sets.scene_matrices,					// lrm - destination descriptor set to update
+	    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,				// lrm - type
+	    0,												// lrm - binding
+	    &scene_buffer_descriptor);						// lrm - VkDescriptorBufferInfo or VkDescriptorImageInfo
+
+	vkUpdateDescriptorSets(get_device().get_handle(), 1, &write_descriptor_set, 0, NULL);
+
+	// 2. Descriptor set for glTF model skin joint matrices
+	alloc_info = vkb::initializers::descriptor_set_allocate_info(descriptor_pool, &descriptor_set_layouts.joint_matrices, 1);
+	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &descriptor_sets.joint_matrices));
+
+/* 
+	// lrm TODO where do I get the buffer here. 
+	// Sascha has a 'skin' structure (where details from a .gltf file's parsed 'skins' are stored, along with an 'ssbo' buffer and descriptor set for the skin)
+	// see loadSkins in Sascha's sample which creates the ssbo buffers 
+
+	VkDescriptorBufferInfo joint_buffer_descriptor   = create_descriptor(???); // lrm TODO - this std::unique_ptr<vkb::core::Buffer> ??? needs to come from somewhere
+
+	write_descriptor_set = vkb::initializers::write_descriptor_set(
+	    descriptor_sets.joint_matrices,					// lrm - destination descriptor set to update
+	    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,				// lrm - type
+	    0,												// lrm - binding
+	    &joint_buffer_descriptor);						// lrm - VkDescriptorBufferInfo or VkDescriptorImageInfo
+
+	vkUpdateDescriptorSets(get_device().get_handle(), 1, &write_descriptor_set, 0, NULL);
+*/
+
+	// 3. Descriptor set for glTF model material
+	/*
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+	*/
 }
 
 void gltfskinning::prepare_uniform_buffers()
@@ -204,6 +264,7 @@ void gltfskinning::prepare_uniform_buffers()
 	*/
 	// end Sascha
 
+	// lrm TODO is this the correct equivalent of Sascha's createBuffer()?
 	uniform_buffers.scene = std::make_unique<vkb::core::Buffer>(get_device(),
 	                                                            sizeof(ubo_values),
 	                                                            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -307,8 +368,8 @@ void gltfskinning::prepare_pipelines()
 	    vkb::initializers::vertex_input_attribute_description(0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, pos)),			// Position
 	    vkb::initializers::vertex_input_attribute_description(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal)),      // Normal
 	    vkb::initializers::vertex_input_attribute_description(0, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv)),             // UV
-	    // lrm TODO colour, jointIndices, jointWeights:
-	    //vkb::initializers::vertex_input_attribute_description(0, 3, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 6),              // lrm the api sample Vertex struct has no colour member
+	    // lrm TODO colour the api sample Vertex struct has no colour member?
+	    //vkb::initializers::vertex_input_attribute_description(0, 3, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 6),
 	  	vkb::initializers::vertex_input_attribute_description(0, 4, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex, joint0)),   // joint indices
 	    vkb::initializers::vertex_input_attribute_description(0, 5, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vertex, weight0)),  // joint weights
 	};	
@@ -351,6 +412,7 @@ void gltfskinning::prepare_pipelines()
 	// lrm TODO leaving out wireframe pipeline for simplicity
 }
 
+// lrm TODO - complete
 void gltfskinning::build_command_buffers()
 {
 	VkCommandBufferBeginInfo command_buffer_begin_info = vkb::initializers::command_buffer_begin_info();
@@ -393,8 +455,13 @@ void gltfskinning::build_command_buffers()
 		VkRect2D scissor = vkb::initializers::rect2D(width, height, 0, 0);
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-		// Draw three vertices with one instance.
-		vkCmdDraw(cmd, 3, 1, 0, 0);
+		// lrm TODO - draw all nodes in scene
+		// Draw 
+		// vkCmdBindDescriptorSets(...);
+		// vkCmdBindPipeline(...);
+		// draw all nodes in gltf scene
+		// lrm - make use of ApiVulkanSample::draw_model(std::unique_ptr<vkb::sg::SubMesh> &model, VkCommandBuffer command_buffer) ?
+
 
 		// Draw user interface.
 		draw_ui(draw_cmd_buffers[i]);
