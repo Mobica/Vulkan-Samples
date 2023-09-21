@@ -62,6 +62,7 @@ class SubgroupsOperations : public ApiVulkanSample
 	void create_pipelines();
 
 	void create_butterfly_texture();
+	void butterfly_fft();
 
 	void update_uniform_buffers();
 	void update_compute_descriptor();
@@ -78,6 +79,10 @@ class SubgroupsOperations : public ApiVulkanSample
 
 		VkPipeline       pipeline        = {VK_NULL_HANDLE};
 		VkPipelineLayout pipeline_layout = {VK_NULL_HANDLE};
+
+		// to be removed after descriptor set unification
+		VkDescriptorSetLayout descriptor_set_layout = {VK_NULL_HANDLE};
+		VkDescriptorSet       descriptor_set        = {VK_NULL_HANDLE};
 	};
 
 	struct GridBuffers
@@ -102,6 +107,13 @@ class SubgroupsOperations : public ApiVulkanSample
 		alignas(8) glm::vec2 wind;
 	};
 
+	struct FFTButterflyParametersUbo
+	{
+		alignas(4) uint32_t ping_pong_index;
+		alignas(4) uint32_t fft_direction;
+		alignas(4) uint32_t stage;
+	};
+
 	struct GuiConfig
 	{
 		bool      wireframe = {false};
@@ -113,6 +125,8 @@ class SubgroupsOperations : public ApiVulkanSample
 	uint32_t                           grid_size = {128u};
 	std::unique_ptr<vkb::core::Buffer> camera_ubo;
 	std::unique_ptr<vkb::core::Buffer> fft_params_ubo;
+	std::unique_ptr<vkb::core::Buffer> fft_butterfly_params_ubo;
+	std::unique_ptr<vkb::core::Buffer> fft_ping_pong_index_ubo;
 
 	std::vector<std::complex<float>> h_tilde_0;
 	std::vector<std::complex<float>> h_tilde_0_conj;
@@ -130,7 +144,15 @@ class SubgroupsOperations : public ApiVulkanSample
 			vkDestroyImage(device, image, nullptr);
 			vkFreeMemory(device, memory, nullptr);
 		};
-	} butterfly_precomp;
+	};
+	FBAttachment butterfly_precomp;
+	FBAttachment ping_pong0;
+	FBAttachment ping_pong1;
+
+	struct
+	{
+		FBAttachment x, y, z;
+	} displacement;
 
 	uint32_t log_2_N;
 
@@ -148,17 +170,19 @@ class SubgroupsOperations : public ApiVulkanSample
 
 	struct
 	{
-		VkQueue               queue                 = {VK_NULL_HANDLE};
-		VkCommandPool         command_pool          = {VK_NULL_HANDLE};
-		VkCommandBuffer       command_buffer        = {VK_NULL_HANDLE};
-		VkSemaphore           semaphore             = {VK_NULL_HANDLE};
-		VkDescriptorSetLayout descriptor_set_layout = {VK_NULL_HANDLE};
-		VkDescriptorSet       descriptor_set        = {VK_NULL_HANDLE};
-		uint32_t              queue_family_index    = {-1u};
+		VkQueue         queue          = {VK_NULL_HANDLE};
+		VkCommandPool   command_pool   = {VK_NULL_HANDLE};
+		VkCommandBuffer command_buffer = {VK_NULL_HANDLE};
+		VkSemaphore     semaphore      = {VK_NULL_HANDLE};
+
+		// to be used for optimization
+		// VkDescriptorSetLayout descriptor_set_layout = {VK_NULL_HANDLE};
+		// VkDescriptorSet       descriptor_set        = {VK_NULL_HANDLE};
+		uint32_t queue_family_index = {-1u};
 
 		struct
 		{
-			Pipeline _default;
+			Pipeline _default, butterfly_fft, butterfly_inversion;
 
 		} pipelines;
 	} compute;

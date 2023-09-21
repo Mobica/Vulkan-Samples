@@ -34,6 +34,11 @@ void SubgroupsOperations::Pipeline::destroy(VkDevice device)
 	{
 		vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
 	}
+
+	if (descriptor_set_layout != VK_NULL_HANDLE)
+	{
+		vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
+	}
 }
 
 SubgroupsOperations::SubgroupsOperations()
@@ -69,7 +74,7 @@ SubgroupsOperations::~SubgroupsOperations()
 	if (device)
 	{
 		compute.pipelines._default.destroy(get_device().get_handle());
-		vkDestroyDescriptorSetLayout(get_device().get_handle(), compute.descriptor_set_layout, nullptr);
+		// vkDestroyDescriptorSetLayout(get_device().get_handle(), compute.descriptor_set_layout, nullptr);
 		vkDestroySemaphore(get_device().get_handle(), compute.semaphore, nullptr);
 		vkDestroyCommandPool(get_device().get_handle(), compute.command_pool, nullptr);
 
@@ -159,6 +164,28 @@ void SubgroupsOperations::create_compute_command_buffer()
 
 void SubgroupsOperations::create_compute_descriptor_set_layout()
 {
+	// butterfly
+	{
+		std::vector<VkDescriptorSetLayoutBinding> set_layout_bindngs = {
+		    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT, 0u),        // bfly_precomp
+		    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT, 1u),        // pingpong0
+		    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT, 2u),        // pingpong1
+		    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 3u)                 // fft parameters
+		};
+		VkDescriptorSetLayoutCreateInfo descriptor_layout = vkb::initializers::descriptor_set_layout_create_info(set_layout_bindngs);
+		VK_CHECK(vkCreateDescriptorSetLayout(get_device().get_handle(), &descriptor_layout, nullptr, &compute.pipelines.butterfly_fft.descriptor_set_layout));
+	}
+
+	// inversion
+	{
+		std::vector<VkDescriptorSetLayoutBinding> set_layout_bindngs = {
+		    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0u),                   // pingpong index
+		    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT, 1u, 3u)        // displacement, pingpong 1, 2
+		};
+		VkDescriptorSetLayoutCreateInfo descriptor_layout = vkb::initializers::descriptor_set_layout_create_info(set_layout_bindngs);
+		VK_CHECK(vkCreateDescriptorSetLayout(get_device().get_handle(), &descriptor_layout, nullptr, &compute.pipelines.butterfly_inversion.descriptor_set_layout));
+	}
+
 	std::vector<VkDescriptorSetLayoutBinding> set_layout_bindngs = {
 	    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0u),
 	    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 1u),
@@ -167,34 +194,81 @@ void SubgroupsOperations::create_compute_descriptor_set_layout()
 	    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT, 4u)};
 	VkDescriptorSetLayoutCreateInfo descriptor_layout = vkb::initializers::descriptor_set_layout_create_info(set_layout_bindngs);
 
-	VK_CHECK(vkCreateDescriptorSetLayout(get_device().get_handle(), &descriptor_layout, nullptr, &compute.descriptor_set_layout));
+	VK_CHECK(vkCreateDescriptorSetLayout(get_device().get_handle(), &descriptor_layout, nullptr, &compute.pipelines._default.descriptor_set_layout));
 }
 
 void SubgroupsOperations::create_compute_descriptor_set()
 {
-	VkDescriptorSetAllocateInfo alloc_info = vkb::initializers::descriptor_set_allocate_info(descriptor_pool, &compute.descriptor_set_layout, 1u);
-	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &compute.descriptor_set));
+	// probably not the best possible place to init attachments
+	createFBAttachement(VK_FORMAT_R32G32_SFLOAT, DISPLACEMENT_MAP_DIM, DISPLACEMENT_MAP_DIM, ping_pong0);
+	createFBAttachement(VK_FORMAT_R32G32_SFLOAT, DISPLACEMENT_MAP_DIM, DISPLACEMENT_MAP_DIM, ping_pong1);
+
+	createFBAttachement(VK_FORMAT_R32_SFLOAT, DISPLACEMENT_MAP_DIM, DISPLACEMENT_MAP_DIM, displacement.x);
+	createFBAttachement(VK_FORMAT_R32_SFLOAT, DISPLACEMENT_MAP_DIM, DISPLACEMENT_MAP_DIM, displacement.y);
+	createFBAttachement(VK_FORMAT_R32_SFLOAT, DISPLACEMENT_MAP_DIM, DISPLACEMENT_MAP_DIM, displacement.z);
+
+	fft_butterfly_params_ubo = std::make_unique<vkb::core::Buffer>(get_device(),
+	                                                               sizeof(FFTButterflyParametersUbo),
+	                                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+	                                                               VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	{
+		VkDescriptorSetAllocateInfo alloc_info = vkb::initializers::descriptor_set_allocate_info(descriptor_pool, &compute.pipelines.butterfly_fft.descriptor_set_layout, 1u);
+		VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &compute.pipelines.butterfly_fft.descriptor_set));
+	}
+
+	{
+		VkDescriptorSetAllocateInfo alloc_info = vkb::initializers::descriptor_set_allocate_info(descriptor_pool, &compute.pipelines.butterfly_inversion.descriptor_set_layout, 1u);
+		VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &compute.pipelines.butterfly_inversion.descriptor_set));
+	}
+
+	VkDescriptorSetAllocateInfo alloc_info = vkb::initializers::descriptor_set_allocate_info(descriptor_pool, &compute.pipelines._default.descriptor_set_layout, 1u);
+	VK_CHECK(vkAllocateDescriptorSets(get_device().get_handle(), &alloc_info, &compute.pipelines._default.descriptor_set));
 
 	update_compute_descriptor();
 }
 
 void SubgroupsOperations::update_compute_descriptor()
 {
-	VkDescriptorBufferInfo fft_params_ubo_buffer               = create_descriptor(*fft_params_ubo);
-	VkDescriptorBufferInfo fft_input_h_tilde0_data_buffer      = create_descriptor(*fft_buffers.fft_input_htilde0);
-	VkDescriptorBufferInfo fft_input_h_tilde0_conj_data_buffer = create_descriptor(*fft_buffers.fft_input_htilde0_conj);
-	VkDescriptorBufferInfo fft_input_weight_data_buffer        = create_descriptor(*fft_buffers.fft_input_weight);
-	//	VkDescriptorBufferInfo fft_input_image                     = create_descriptor(*fft_buffers.fft_height_map_image->get_vk_image());
+	VkDescriptorImageInfo butterfly_precomp_descriptor{nullptr, butterfly_precomp.view, VK_IMAGE_LAYOUT_GENERAL};
+	VkDescriptorImageInfo ping_pong0_descriptor{nullptr, ping_pong0.view, VK_IMAGE_LAYOUT_GENERAL};
+	VkDescriptorImageInfo ping_pong1_descriptor{nullptr, ping_pong1.view, VK_IMAGE_LAYOUT_GENERAL};
 
-	std::vector<VkWriteDescriptorSet> wirte_descriptor_sets = {
-	    vkb::initializers::write_descriptor_set(compute.descriptor_set, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0u, &fft_params_ubo_buffer),
-	    vkb::initializers::write_descriptor_set(compute.descriptor_set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, &fft_input_h_tilde0_data_buffer),
-	    vkb::initializers::write_descriptor_set(compute.descriptor_set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2u, &fft_input_h_tilde0_conj_data_buffer),
-	    vkb::initializers::write_descriptor_set(compute.descriptor_set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3u, &fft_input_weight_data_buffer),
-	    //    vkb::initializers::write_descriptor_set(compute.descriptor_set, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4u, &fft_input_image)
+	VkDescriptorBufferInfo fft_butterfly_params_ubo_buffer = create_descriptor(*fft_butterfly_params_ubo);
 
-	};
-	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(wirte_descriptor_sets.size()), wirte_descriptor_sets.data(), 0u, nullptr);
+	{
+		std::vector<VkWriteDescriptorSet> write_descriptor_sets = {
+		    vkb::initializers::write_descriptor_set(compute.pipelines.butterfly_fft.descriptor_set, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0u, &butterfly_precomp_descriptor),
+		    vkb::initializers::write_descriptor_set(compute.pipelines.butterfly_fft.descriptor_set, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1u, &ping_pong0_descriptor),
+		    vkb::initializers::write_descriptor_set(compute.pipelines.butterfly_fft.descriptor_set, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2u, &ping_pong1_descriptor),
+		    vkb::initializers::write_descriptor_set(compute.pipelines.butterfly_fft.descriptor_set, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3u, &fft_butterfly_params_ubo_buffer)};
+		vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0u, nullptr);
+	}
+
+	{
+		std::vector<VkWriteDescriptorSet> write_descriptor_sets = {
+		    // TODO: inversion
+		};
+		vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0u, nullptr);
+	}
+
+	{
+		VkDescriptorBufferInfo fft_params_ubo_buffer               = create_descriptor(*fft_params_ubo);
+		VkDescriptorBufferInfo fft_input_h_tilde0_data_buffer      = create_descriptor(*fft_buffers.fft_input_htilde0);
+		VkDescriptorBufferInfo fft_input_h_tilde0_conj_data_buffer = create_descriptor(*fft_buffers.fft_input_htilde0_conj);
+		VkDescriptorBufferInfo fft_input_weight_data_buffer        = create_descriptor(*fft_buffers.fft_input_weight);
+		//	VkDescriptorBufferInfo fft_input_image                     = create_descriptor(*fft_buffers.fft_height_map_image->get_vk_image());
+
+		std::vector<VkWriteDescriptorSet> wirte_descriptor_sets = {
+		    vkb::initializers::write_descriptor_set(compute.pipelines._default.descriptor_set, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0u, &fft_params_ubo_buffer),
+		    vkb::initializers::write_descriptor_set(compute.pipelines._default.descriptor_set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, &fft_input_h_tilde0_data_buffer),
+		    vkb::initializers::write_descriptor_set(compute.pipelines._default.descriptor_set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2u, &fft_input_h_tilde0_conj_data_buffer),
+		    vkb::initializers::write_descriptor_set(compute.pipelines._default.descriptor_set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3u, &fft_input_weight_data_buffer),
+		    //    vkb::initializers::write_descriptor_set(compute.descriptor_set, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4u, &fft_input_image)
+
+		};
+		vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(wirte_descriptor_sets.size()), wirte_descriptor_sets.data(), 0u, nullptr);
+	}
 }
 
 void SubgroupsOperations::preapre_compute_pipeline_layout()
@@ -202,19 +276,29 @@ void SubgroupsOperations::preapre_compute_pipeline_layout()
 	VkPipelineLayoutCreateInfo compute_pipeline_layout_info = {};
 	compute_pipeline_layout_info.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	compute_pipeline_layout_info.setLayoutCount             = 1u;
-	compute_pipeline_layout_info.pSetLayouts                = &compute.descriptor_set_layout;
+	compute_pipeline_layout_info.pSetLayouts                = &compute.pipelines._default.descriptor_set_layout;
 
 	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &compute_pipeline_layout_info, nullptr, &compute.pipelines._default.pipeline_layout));
+	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &compute_pipeline_layout_info, nullptr, &compute.pipelines.butterfly_fft.pipeline_layout));
+	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &compute_pipeline_layout_info, nullptr, &compute.pipelines.butterfly_inversion.pipeline_layout));
 }
 
 void SubgroupsOperations::prepare_compute_pipeline()
 {
 	VkComputePipelineCreateInfo computeInfo = {};
 	computeInfo.sType                       = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	computeInfo.layout                      = compute.pipelines._default.pipeline_layout;
-	computeInfo.stage                       = load_shader("subgroups_operations/ocean_fft.comp", VK_SHADER_STAGE_COMPUTE_BIT);
 
+	computeInfo.layout = compute.pipelines._default.pipeline_layout;
+	computeInfo.stage  = load_shader("subgroups_operations/ocean_fft.comp", VK_SHADER_STAGE_COMPUTE_BIT);
 	VK_CHECK(vkCreateComputePipelines(get_device().get_handle(), pipeline_cache, 1u, &computeInfo, nullptr, &compute.pipelines._default.pipeline));
+
+	computeInfo.layout = compute.pipelines.butterfly_fft.pipeline_layout;
+	computeInfo.stage  = load_shader("subgroups_operations/butterfly_fft.comp", VK_SHADER_STAGE_COMPUTE_BIT);
+	VK_CHECK(vkCreateComputePipelines(get_device().get_handle(), pipeline_cache, 1u, &computeInfo, nullptr, &compute.pipelines.butterfly_fft.pipeline));
+
+	computeInfo.layout = compute.pipelines.butterfly_inversion.pipeline_layout;
+	computeInfo.stage  = load_shader("subgroups_operations/butterfly_inversion.comp", VK_SHADER_STAGE_COMPUTE_BIT);
+	VK_CHECK(vkCreateComputePipelines(get_device().get_handle(), pipeline_cache, 1u, &computeInfo, nullptr, &compute.pipelines.butterfly_inversion.pipeline));
 }
 
 void SubgroupsOperations::build_compute_command_buffer()
@@ -239,7 +323,7 @@ void SubgroupsOperations::build_compute_command_buffer()
 	// fft calculation
 	{
 		vkCmdBindPipeline(compute.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelines._default.pipeline);
-		vkCmdBindDescriptorSets(compute.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelines._default.pipeline_layout, 0u, 1u, &compute.descriptor_set, 0u, nullptr);
+		vkCmdBindDescriptorSets(compute.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelines._default.pipeline_layout, 0u, 1u, &compute.pipelines._default.descriptor_set, 0u, nullptr);
 
 		vkCmdDispatch(compute.command_buffer, 32u, 32u, 1u);
 	}
@@ -448,7 +532,7 @@ void SubgroupsOperations::setup_descriptor_pool()
 	    vkb::initializers::descriptor_pool_size(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1u),
 	};
 	VkDescriptorPoolCreateInfo descriptor_pool_create_info =
-	    vkb::initializers::descriptor_pool_create_info(static_cast<uint32_t>(pool_sizes.size()), pool_sizes.data(), 3u);
+	    vkb::initializers::descriptor_pool_create_info(static_cast<uint32_t>(pool_sizes.size()), pool_sizes.data(), 30u);        // overshoot
 	VK_CHECK(vkCreateDescriptorPool(get_device().get_handle(), &descriptor_pool_create_info, nullptr, &descriptor_pool));
 }
 
@@ -797,7 +881,6 @@ uint32_t SubgroupsOperations::reverse(uint32_t i)
 
 void SubgroupsOperations::create_butterfly_texture()
 {
-	VkCommandPool   commandPool    = compute.command_pool;
 	VkCommandBuffer command_buffer = compute.command_buffer;
 
 	std::vector<VkDescriptorSetLayoutBinding> set_layout_bindngs = {
@@ -853,4 +936,12 @@ void SubgroupsOperations::create_butterfly_texture()
 	vkCmdDispatch(command_buffer, 32u, 32u, 1u);
 
 	VK_CHECK(vkEndCommandBuffer(command_buffer));
+}
+
+void SubgroupsOperations::butterfly_fft()
+{
+	VkCommandBuffer command_buffer = compute.command_buffer;
+
+	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelines.butterfly_fft.pipeline);
+	vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelines.butterfly_fft.pipeline_layout, 0u, 1u, &precompute.descriptor_set, 0u, nullptr);
 }
