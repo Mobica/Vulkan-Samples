@@ -488,8 +488,8 @@ void SubgroupsOperations::setup_descriptor_pool()
 
 void SubgroupsOperations::create_descriptor_set_layout()
 {
-	std::vector<VkDescriptorSetLayoutBinding> set_layout_bindings = {
-	    vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0u)};
+    std::vector<VkDescriptorSetLayoutBinding> set_layout_bindings = { // TODO control bit possibly not needed
+        vkb::initializers::descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT , 0u)};
 
 	VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = vkb::initializers::descriptor_set_layout_create_info(set_layout_bindings);
 	VK_CHECK(vkCreateDescriptorSetLayout(get_device().get_handle(), &descriptor_set_layout_create_info, nullptr, &ocean.descriptor_set_layout));
@@ -550,13 +550,13 @@ void SubgroupsOperations::create_pipelines()
 	        dynamic_state_enables.data(),
 	        static_cast<uint32_t>(dynamic_state_enables.size()),
 	        0u);
-	VkPipelineTessellationStateCreateInfo tessellation_state = vkb::initializers::pipeline_tessellation_state_create_info(4);
+    VkPipelineTessellationStateCreateInfo tessellation_state = vkb::initializers::pipeline_tessellation_state_create_info(4);
 
-	std::array<VkPipelineShaderStageCreateInfo, 4> shader_stages;
+    std::array<VkPipelineShaderStageCreateInfo, 4> shader_stages;
 	shader_stages[0] = load_shader("subgroups_operations/ocean.vert", VK_SHADER_STAGE_VERTEX_BIT);
-	shader_stages[1] = load_shader("subgroups_operations/ocean.frag", VK_SHADER_STAGE_FRAGMENT_BIT);
-	shader_stages[2] = load_shader("subgroups_operations/ocean.tesc", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
-	shader_stages[3] = load_shader("subgroups_operations/ocean.tese", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
+    shader_stages[1] = load_shader("subgroups_operations/ocean.frag", VK_SHADER_STAGE_FRAGMENT_BIT);
+    shader_stages[2] = load_shader("subgroups_operations/ocean.tesc", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+    shader_stages[3] = load_shader("subgroups_operations/ocean.tese", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
 
 	const std::vector<VkVertexInputBindingDescription> vertex_input_bindings = {
 	    vkb::initializers::vertex_input_binding_description(0u, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX)};
