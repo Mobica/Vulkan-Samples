@@ -3,7 +3,7 @@
 #define PI_32F 3.14159265358979f
 #define DISPLACEMENT_MAP_DIM 256
 
-layout (local_size_x = 8, local_size_y = 32) in;
+layout (local_size_x = 8, local_size_y = 1) in;
 
 layout (binding = 0, rgba32f) writeonly uniform image2D u_butterfly_precomp;
 
@@ -30,6 +30,7 @@ void main()
         if ((mod(pos.y, pow(2, pos.x + 1))) < butterfly_span) butterfly_wing = 1;
 
         ivec2 pixel_pos = ivec2(gl_GlobalInvocationID.xy);
+        //pixel_pos.y = N - pixel_pos.y - 1;
 
         vec4 result;
         result.x = cos(2.f * PI_32F * k / float(N));	// Twiddle factor real part
