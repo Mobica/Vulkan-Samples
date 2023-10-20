@@ -24,6 +24,6 @@ layout (location = 1) out vec2 outUv;
 
 void main() 
 {
-	outPos = inPos;
-	outUv = inUv;
+    outPos = inPos;
+    outUv = inUv;
 }
