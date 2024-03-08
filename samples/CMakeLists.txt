@@ -122,17 +122,21 @@ set(ORDER_LIST
     "hpp_hello_triangle"
 	"hpp_hlsl_shaders"
 	"hpp_instancing"
+	"hpp_oit_linked_lists"
 	"hpp_separate_image_sampler"
 	"hpp_terrain_tessellation"
 	"hpp_texture_loading"
 	"hpp_texture_mipmap_generation"
+	
+	#HPP Extension Samples
+	"hpp_mesh_shading"
 	
     #HPP Performance Samples
     "hpp_pipeline_cache"
     "hpp_swapchain_images"
     
     #General Samples
-    "nerf")
+    "mobile_nerf")
 
 # Orders the sample ids by the order list above
 set(ORDERED_LIST)

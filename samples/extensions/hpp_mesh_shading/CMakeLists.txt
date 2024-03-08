@@ -1,4 +1,4 @@
-# Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+# Copyright (c) 2024 Holochip Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -22,7 +22,10 @@ get_filename_component(CATEGORY_NAME ${PARENT_DIR} NAME)
 add_sample_with_tags(
     ID ${FOLDER_NAME}
     CATEGORY ${CATEGORY_NAME}
-    AUTHOR "Qualcomm"
-    NAME "NeRF"
-    DESCRIPTION "A Neural Radiance Field synthesizer sample, based on textured polygons"
+    AUTHOR "Holochip Corporation"
+    NAME "HPP Mesh shader sample"
+    DESCRIPTION "Example showing how to utilize the EXT_MESH_SHADER pipeline, using Vulkan-Hpp."
+    SHADER_FILES_GLSL
+        "mesh_shading/ms.mesh"
+        "mesh_shading/ps.frag"
 )
