@@ -826,7 +826,7 @@ void DynamicMultisampleRasterization::prepare_uniform_buffers()
 
 void DynamicMultisampleRasterization::prepare_gui()
 {
-	//gui = std::make_unique<vkb::Gui>(*this, *window, /*stats=*/nullptr, 15.0f, true);
+	// gui = std::make_unique<vkb::Gui>(*this, *window, /*stats=*/nullptr, 15.0f, true);
 	create_gui(*window, /*stats=*/nullptr, 15.0f, true);
 
 	prepare_gui_pipeline();
