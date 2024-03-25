@@ -1,4 +1,4 @@
-/* Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -18,6 +18,7 @@
 #pragma once
 
 #include <core/hpp_command_buffer.h>
+#include <core/hpp_command_pool.h>
 #include <core/hpp_debug.h>
 #include <core/hpp_physical_device.h>
 #include <core/hpp_queue.h>
@@ -31,7 +32,6 @@ namespace vkb
 namespace core
 {
 class HPPBuffer;
-class HPPCommandPool;
 
 class HPPDevice : public vkb::core::HPPVulkanResource<vk::Device>
 {
@@ -60,8 +60,6 @@ class HPPDevice : public vkb::core::HPPVulkanResource<vk::Device>
 
 	vkb::core::HPPPhysicalDevice const &get_gpu() const;
 
-	VmaAllocator const &get_memory_allocator() const;
-
 	/**
 	 * @brief Returns the debug utils associated with this HPPDevice.
 	 */
@@ -86,16 +84,6 @@ class HPPDevice : public vkb::core::HPPVulkanResource<vk::Device>
 	uint32_t get_queue_family_index(vk::QueueFlagBits queue_flag) const;
 
 	vkb::core::HPPCommandPool &get_command_pool();
-
-	/**
-	 * @brief Creates a vulkan buffer
-	 * @param usage The buffer usage
-	 * @param properties The memory properties
-	 * @param size The size of the buffer
-	 * @param data The data to place inside the buffer
-	 * @returns A valid vk::Buffer and a corresponding vk::DeviceMemory
-	 */
-	std::pair<vk::Buffer, vk::DeviceMemory> create_buffer(vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::DeviceSize size, void *data = nullptr) const;
 
 	/**
 	 * @brief Creates a vulkan image and associated device memory
@@ -145,11 +133,7 @@ class HPPDevice : public vkb::core::HPPVulkanResource<vk::Device>
 
 	std::unique_ptr<vkb::core::HPPDebugUtils> debug_utils;
 
-	std::vector<vk::ExtensionProperties> device_extensions;
-
 	std::vector<const char *> enabled_extensions{};
-
-	VmaAllocator memory_allocator{VK_NULL_HANDLE};
 
 	std::vector<std::vector<vkb::core::HPPQueue>> queues;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, Mobica Limited
+/* Copyright (c) 2023-2024, Mobica Limited
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -26,7 +26,7 @@ DynamicLineRasterization::DynamicLineRasterization()
 
 DynamicLineRasterization::~DynamicLineRasterization()
 {
-	if (device)
+	if (has_device())
 	{
 		vkDestroyPipelineLayout(get_device().get_handle(), pipeline_layout, nullptr);
 
@@ -284,7 +284,7 @@ void DynamicLineRasterization::update_uniform_buffers()
 
 	camera_ubo->convert_and_update(cam);
 
-	build_command_buffers();
+	rebuild_command_buffers();
 }
 
 void DynamicLineRasterization::create_descriptor_set()
@@ -457,7 +457,7 @@ void DynamicLineRasterization::on_update_ui_overlay(vkb::Drawer &drawer)
 {
 	auto build_command_buffers_when = [this](bool drawer_action) {
 		if (drawer_action)
-			build_command_buffers();
+			rebuild_command_buffers();
 	};
 
 	auto uint16_to_hex_string = [](const char *caption, uint16_t value) {
@@ -484,7 +484,7 @@ void DynamicLineRasterization::on_update_ui_overlay(vkb::Drawer &drawer)
 			{
 				gui_settings.stipple_pattern = array_to_uint16(gui_settings.stipple_pattern_arr);
 
-				build_command_buffers();
+				rebuild_command_buffers();
 			}
 			ImGui::PopID();
 			if (i % 8 != 7)
@@ -509,7 +509,7 @@ bool DynamicLineRasterization::resize(const uint32_t width, const uint32_t heigh
 	return true;
 }
 
-std::unique_ptr<vkb::VulkanSample> create_dynamic_line_rasterization()
+std::unique_ptr<vkb::VulkanSample<vkb::BindingType::C>> create_dynamic_line_rasterization()
 {
 	return std::make_unique<DynamicLineRasterization>();
 }

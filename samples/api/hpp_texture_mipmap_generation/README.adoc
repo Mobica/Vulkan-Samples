@@ -1,5 +1,5 @@
 ////
-- Copyright (c) 2022-2023, The Khronos Group
+- Copyright (c) 2022-2024, The Khronos Group
 -
 - SPDX-License-Identifier: Apache-2.0
 -
@@ -25,7 +25,7 @@ ifdef::site-gen-antora[]
 TIP: The source for this sample can be found in the https://github.com/KhronosGroup/Vulkan-Samples/tree/main/samples/api/hpp_texture_mipmap_generation[Khronos Vulkan samples github repository].
 endif::[]
 
-NOTE: A transcoded version of the API sample https://github.com/KhronosGroup/Vulkan-Samples/tree/master/samples/api/texture_mipmap_generation[Texture mipmap generation] that illustrates the usage of the C{pp} bindings of vulkan provided by vulkan.hpp.
+NOTE: A transcoded version of the API sample https://github.com/KhronosGroup/Vulkan-Samples/tree/main/samples/api/texture_mipmap_generation[Texture mipmap generation] that illustrates the usage of the C{pp} bindings of vulkan provided by vulkan.hpp.
 
 == Overview
 
@@ -47,15 +47,15 @@ To detect this, check for queue families with only the  `vk::QueueFlagBits::eTra
 
 Without mip mapping:
 
-image::../texture_mipmap_generation/images/mip_mapping_off.jpg[Off,512px]
+image::samples/api/texture_mipmap_generation/images/mip_mapping_off.jpg[Off,512px]
 
 Using mip mapping with a bilinear filter:
 
-image:../texture_mipmap_generation/images/mip_mapping_bilinear.jpg[Bilinear,512px]
+image::samples/api/texture_mipmap_generation/images/mip_mapping_bilinear.jpg[Bilinear,512px]
 
 Using mip mapping with an anisotropic filter:
 
-image:../texture_mipmap_generation/images/mip_mapping_anisotropic.jpg[Anisotropic,512px]
+image::samples/api/texture_mipmap_generation/images/mip_mapping_anisotropic.jpg[Anisotropic,512px]
 
 == Requirements
 
