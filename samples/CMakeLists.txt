@@ -91,6 +91,7 @@ set(ORDER_LIST
     "color_write_enable"
     "dynamic_multisample_rasterization"
     "sparse_image"
+    "dynamic_primitive_clipping"
 
     #Performance Samples
     "swapchain_images"
