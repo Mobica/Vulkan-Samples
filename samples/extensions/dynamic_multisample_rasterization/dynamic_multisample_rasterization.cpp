@@ -245,20 +245,10 @@ void DynamicMultisampleRasterization::build_command_buffers()
 			attachments[0].imageView = swapchain_buffers[i].view;
 		}
 
-		VkMultisampledRenderToSingleSampledInfoEXT multisampled_render;
-		if (sample_count != VK_SAMPLE_COUNT_1_BIT)
-		{
-			multisampled_render.multisampledRenderToSingleSampledEnable = VK_TRUE;
-			multisampled_render.sType                                   = VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT;
-			multisampled_render.rasterizationSamples                    = sample_count;
-			multisampled_render.pNext                                   = nullptr;
-		}
-
 		auto render_area             = VkRect2D{VkOffset2D{}, VkExtent2D{width, height}};
 		auto render_info             = vkb::initializers::rendering_info(render_area, 1, &attachments[0]);
 		render_info.layerCount       = 1;
 		render_info.pDepthAttachment = &attachments[1];
-		render_info.pNext            = (sample_count != VK_SAMPLE_COUNT_1_BIT) ? &multisampled_render : VK_NULL_HANDLE;
 
 		vkb::image_layout_transition(draw_cmd_buffers[i],
 		                             swapchain_buffers[i].image,
